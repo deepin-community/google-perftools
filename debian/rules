@@ -1,0 +1,41 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+include /usr/share/dpkg/architecture.mk
+
+TEST_ARCHS = i386 amd64
+
+DESTDIR = $(CURDIR)/debian/tmp
+
+export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+override_dh_auto_install:
+	dh_auto_install
+	# rename binary
+	cd $(DESTDIR)/usr/bin && mv pprof google-pprof
+	cd $(DESTDIR)/usr/share/man/man1 && \
+		mv pprof.1 google-pprof.1 && \
+		sed -i 's/pprof/google-pprof/g' google-pprof.1
+	cd $(DESTDIR)/usr/share/doc/gperftools/ && \
+		sed -i 's/pprof/google-pprof/g' README
+	# remove unwanted documentation
+	cd $(DESTDIR)/usr/share/doc/gperftools/ && \
+		rm -f ChangeLog ChangeLog.old INSTALL README_windows.txt TODO
+	# remove .la files
+	find $(DESTDIR) -name \*.la -exec rm {} \;
+
+override_dh_auto_test:
+ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
+# List of architectures for which test execution is enabled
+ifneq (,$(findstring $(DEB_HOST_ARCH), $(TEST_ARCHS)))
+	$(MAKE) check
+endif # TEST_ARCHS
+endif # nocheck
+
+%:
+	dh $@
+
+.PHONY: override_dh_auto_install override_dh_auto_test

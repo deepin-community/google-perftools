@@ -1,0 +1,502 @@
+diff --git a/m4/pc_from_ucontext.m4 b/m4/pc_from_ucontext.m4
+index 159b01d..2da5a62 100644
+--- a/m4/pc_from_ucontext.m4
++++ b/m4/pc_from_ucontext.m4
+@@ -27,6 +27,7 @@ AC_DEFUN([AC_PC_FROM_UCONTEXT],
+    pc_fields="$pc_fields uc_mcontext.gregs[[REG_RIP]]" # Linux (x86_64)
+    pc_fields="$pc_fields uc_mcontext.sc_ip"            # Linux (ia64)
+    pc_fields="$pc_fields uc_mcontext.pc"               # Linux (mips)
++   pc_fields="$pc_fields uc_mcontext.sc_pc"               # Linux (sw64)
+    pc_fields="$pc_fields uc_mcontext.uc_regs->gregs[[PT_NIP]]" # Linux (ppc)
+    pc_fields="$pc_fields uc_mcontext.__gregs[[REG_PC]]"  # Linux (riscv64)
+    pc_fields="$pc_fields uc_mcontext.psw.addr"         # Linux (s390)
+diff --git a/src/base/atomicops.h b/src/base/atomicops.h
+index f1daf3b..77ae4c0 100644
+--- a/src/base/atomicops.h
++++ b/src/base/atomicops.h
+@@ -122,6 +122,9 @@
+ #include "base/atomicops-internals-windows.h"
+ #elif defined(__linux__) && defined(__PPC__)
+ #include "base/atomicops-internals-linuxppc.h"
++#elif defined(__linux__) && defined(__sw_64__)
++//#include "base/atomicops-internals-sw_64.h"
++#include "base/atomicops-internals-gcc.h"
+ #elif defined(__GNUC__) && defined(__mips__)
+ #include "base/atomicops-internals-mips.h"
+ #elif defined(__GNUC__) && GCC_VERSION >= 40700
+diff --git a/src/base/basictypes.h b/src/base/basictypes.h
+index ea87a6d..d3b4232 100644
+--- a/src/base/basictypes.h
++++ b/src/base/basictypes.h
+@@ -378,6 +378,8 @@ class AssignAttributeStartEnd {
+     // some ARMs have shorter cache lines (ARM1176JZF-S is 32 bytes for example) but obviously 64-byte aligned implies 32-byte aligned
+ # elif (defined(__mips__))
+ #   define CACHELINE_ALIGNED __attribute__((aligned(128)))
++# elif (defined(__sw_64__))
++#   define CACHELINE_ALIGNED __attribute__((aligned(32)))
+ # elif (defined(__aarch64__))
+ #   define CACHELINE_ALIGNED __attribute__((aligned(64)))
+     // implementation specific, Cortex-A53 and 57 should have 64 bytes
+diff --git a/src/base/linux_syscall_support.h b/src/base/linux_syscall_support.h
+index d6899b8..31a7bf0 100644
+--- a/src/base/linux_syscall_support.h
++++ b/src/base/linux_syscall_support.h
+@@ -136,7 +136,7 @@
+  */
+ #if (defined(__i386__) || defined(__x86_64__) || defined(__arm__) || \
+      defined(__mips__) || defined(__mips64) || defined(__mips64el__) || defined(__PPC__) || \
+-     defined(__aarch64__) || defined(__s390__) || defined(__riscv)) \
++     defined(__aarch64__) || defined(__s390__) || defined(__riscv)) || defined(__sw_64__) \
+   && (defined(__linux))
+ 
+ #ifndef SYS_CPLUSPLUS
+@@ -264,7 +264,7 @@ struct kernel_old_sigaction {
+ } __attribute__((packed,aligned(4)));
+ #elif (defined(__mips__) && _MIPS_SIM == _MIPS_SIM_ABI32)
+   #define kernel_old_sigaction kernel_sigaction
+-#elif defined(__aarch64__)
++#elif defined(__aarch64__) || defined(__sw_64__)
+   // No kernel_old_sigaction defined for arm64.
+ #endif
+ 
+@@ -356,6 +356,27 @@ struct kernel_stat64 {
+   unsigned long      __unused5;
+   unsigned long      __unused6;
+ };
++#elif defined(__sw_64)
++struct kernel_stat64 {
++  unsigned long      st_dev;
++  unsigned long      st_ino;
++  unsigned long      st_rdev;
++  long               st_size;
++  unsigned long      st_blocks;
++  unsigned int       st_mode;
++  unsigned int       st_uid;
++  unsigned int       st_gid;
++  unsigned int       st_blksize;
++  unsigned int       st_blink;
++  unsigned int       __pad0;
++  unsigned int       st_atime_;
++  unsigned long      st_atime_nsec_;
++  unsigned           st_mtime_;
++  unsigned           st_mtime_nsec_;
++  unsigned           st_ctime_;
++  unsigned           st_ctime_nsec_;
++  long               __unused[3];
++};
+ #else
+ struct kernel_stat64 {
+   unsigned long long st_dev;
+@@ -497,6 +518,25 @@ struct kernel_stat {
+   unsigned int       __unused4;
+   unsigned int       __unused5;
+ };
++#elif defined(__sw_64__)
++struct kernel_stat
++  {
++    unsigned int st_dev;
++    unsigned int st_ino;
++    unsigned int st_mode;
++    unsigned int st_nlink;
++    unsigned int st_uid;
++    unsigned int st_gid;
++    unsigned int st_rdev;
++    long int st_size;
++    unsigned long int st_atime;
++    unsigned long int st_mtime;
++    unsigned long int st_ctime;
++    unsigned int st_blksize;
++    int st_blocks;
++    unsigned int st_flags;
++    unsigned int st_gen;
++  };
+ #elif defined(__s390x__)
+ struct kernel_stat {
+   unsigned long      st_dev;
+@@ -954,6 +994,37 @@ struct kernel_stat {
+ # ifndef __NR_fstatat
+ # define __NR_fstatat            79
+ # endif
++/* End of riscv definitions                                             */
++#elif defined(__sw_64__)
++# ifndef __NR_rt_sigaction
++# define __NR_rt_sigaction       352
++# define __NR_rt_sigprocmask     353
++# endif
++# ifndef __NR_stat64
++# define __NR_stat64             425
++# endif
++# ifndef __NR_fstat64
++# define __NR_fstat64            427
++# endif
++# ifndef __NR_getdents64
++# define __NR_getdents64         377
++# endif
++# ifndef __NR_gettid
++# define __NR_gettid             378
++# endif
++# ifndef __NR_futex
++# define __NR_futex              394
++# endif
++# ifndef __NR_openat
++# define __NR_openat             450
++# endif
++# ifndef __NR_getcpu
++# define __NR_getcpu             473
++# endif
++# ifndef __NR_socket
++# define __NR_socket             97
++# endif
++/* End of sunway definitions                                             */
+ #endif
+ 
+ 
+@@ -1029,7 +1100,7 @@ struct kernel_stat {
+       }                                                                       \
+       return (type) (res);                                                    \
+     } while (0)
+-  #elif defined(__mips__)
++  #elif defined(__mips__) || defined(__sw_64__)
+   /* On MIPS, failing system calls return -1, and set errno in a
+    * separate CPU register.
+    */
+@@ -2212,6 +2283,152 @@ struct kernel_stat {
+       }
+       LSS_RETURN(int, __ret, __err);
+     }
++  #elif defined(__sw_64__)
++    #undef LSS_REG
++    #define LSS_REG(r,a) register unsigned long __r##r __asm__("$"#r) =       \
++                                 (unsigned long)(a)
++    #define SW_64_SYSCALL_CLOBBERS  "$1", "$2", "$3", "$4", "$5", "$6", "$7", "$8",     \
++                                 "$22", "$23", "$24", "$25", "$27", "$28", "memory"
++    // See http://sources.redhat.com/ml/libc-alpha/2004-10/msg00050.html
++    // or http://www.linux-mips.org/archives/linux-mips/2004-10/msg00142.html
++
++    #undef  LSS_BODY
++    #define LSS_BODY(type,name,r19,...)                                        \
++          register unsigned long __v0 __asm__("$0") = __NR_##name;            \
++          __asm__ __volatile__ ("sys_call 0x83 \n"                                   \
++                                : "=&r"(__v0), r19 (__r19)                      \
++                                : "0"(__v0), ##__VA_ARGS__                    \
++                                : SW_64_SYSCALL_CLOBBERS);                     \
++          LSS_RETURN(type, __v0, __r19)
++    #undef _syscall0
++    #define _syscall0(type, name)                                             \
++      type LSS_NAME(name)() {                                                 \
++        register unsigned long __r19 __asm__("$19");                            \
++        LSS_BODY(type, name, "=r");                                           \
++      }
++    #undef _syscall1
++    #define _syscall1(type, name, type1, arg1)                                \
++      type LSS_NAME(name)(type1 arg1) {                                       \
++        register unsigned long __r19 __asm__("$19");                            \
++        LSS_REG(16, arg1); LSS_BODY(type, name, "=r", "r"(__r16));              \
++      }
++    #undef _syscall2
++    #define _syscall2(type, name, type1, arg1, type2, arg2)                   \
++      type LSS_NAME(name)(type1 arg1, type2 arg2) {                           \
++        register unsigned long __r19 __asm__("$19");                            \
++        LSS_REG(16, arg1); LSS_REG(17, arg2);                                   \
++        LSS_BODY(type, name, "=r", "r"(__r16), "r"(__r17));                     \
++      }
++    #undef _syscall3
++    #define _syscall3(type, name, type1, arg1, type2, arg2, type3, arg3)      \
++      type LSS_NAME(name)(type1 arg1, type2 arg2, type3 arg3) {               \
++        register unsigned long __r19 __asm__("$19");                            \
++        LSS_REG(16, arg1); LSS_REG(17, arg2); LSS_REG(18, arg3);                 \
++        LSS_BODY(type, name, "=r", "r"(__r16), "r"(__r17), "r"(__r18));          \
++      }
++    #undef _syscall4
++    #define _syscall4(type,name,type1,arg1,type2,arg2,type3,arg3,type4,arg4)  \
++      type LSS_NAME(name)(type1 arg1, type2 arg2, type3 arg3, type4 arg4) {   \
++        LSS_REG(16, arg1); LSS_REG(17, arg2); LSS_REG(18, arg3);                 \
++        LSS_REG(19, arg4);                                                     \
++        LSS_BODY(type, name, "+r", "r"(__r16), "r"(__r17), "r"(__r18));          \
++      }
++    #undef _syscall5
++    #define _syscall5(type,name,type1,arg1,type2,arg2,type3,arg3,type4,arg4,  \
++                      type5,arg5)                                             \
++      type LSS_NAME(name)(type1 arg1, type2 arg2, type3 arg3, type4 arg4,     \
++                          type5 arg5) {                                       \
++        LSS_REG(16, arg1); LSS_REG(17, arg2); LSS_REG(18, arg3);                 \
++        LSS_REG(19, arg4); LSS_REG(20, arg5);                                   \
++        LSS_BODY(type, name, "+r", "r"(__r16), "r"(__r17), "r"(__r18),           \
++                 "r"(__r19));                                                  \
++      }
++    #undef _syscall6
++    #define _syscall6(type,name,type1,arg1,type2,arg2,type3,arg3,type4,arg4,  \
++                      type5,arg5,type6,arg6)                                  \
++      type LSS_NAME(name)(type1 arg1, type2 arg2, type3 arg3, type4 arg4,     \
++                          type5 arg5,type6 arg6) {                            \
++        LSS_REG(16, arg1); LSS_REG(17, arg2); LSS_REG(18, arg3);                 \
++        LSS_REG(19, arg4); LSS_REG(20, arg5); LSS_REG(21, arg6);                 \
++        LSS_BODY(type, name, "+r", "r"(__r16), "r"(__r17), "r"(__r18),           \
++                 "r"(__r19), "r"(__r20));                                       \
++      }
++    LSS_INLINE int LSS_NAME(clone)(int (*fn)(void *), void *child_stack,
++                                   int flags, void *arg, int *parent_tidptr,
++                                   void *newtls, int *child_tidptr) {
++      register unsigned long __v0 __asm__("$0");
++      register unsigned long __r19 __asm__("$19") = (unsigned long)newtls;
++      {
++        register int   __flags __asm__("$16") = flags;
++        register void *__stack __asm__("$17") = child_stack;
++        register void *__ptid  __asm__("$18") = parent_tidptr;
++        register int  *__ctid  __asm__("$19") = child_tidptr;
++        __asm__ __volatile__(
++                             /* if (fn == NULL || child_stack == NULL)
++                              *   return -EINVAL;
++                              */
++                             "ldi    %0,%2\n"
++                             "ldi   $16,%5\n"
++                             "beq   $16,1f\n"
++                             "ldi   $17,%6\n"
++                             "beq   $17,1f\n"
++                             "ldi   $18,%7\n"
++                             "ldi   $19,%8\n"
++                             "ldi   $20,%9\n"
++                             "ldi   $21,%10\n"
++
++                             /* Push "arg" and "fn" onto the stack that will be
++                              * used by the child.
++                              */
++                             "subl  $17,32,$17\n"
++                             "stl   $16,0($17)\n"
++                             "stl   $19,8($17)\n"
++                             "stl   $18,16($17)\n"
++
++                             /* $7 = syscall($4 = flags,
++                              *              $5 = child_stack,
++                              *              $6 = parent_tidptr,
++                              *              $7 = newtls,
++                              *              $8 = child_tidptr)
++                              */
++                             "mov     $18, $16 \n"
++                             "mov     $20, $18 \n"
++                             "ldl     $19,0($30)\n"
++                             "mov     $21,$20 \n"
++        /* Do the system call.  */
++                             "ldi     $0, %3 \n"
++                             "sys_call 0x83\n"
++
++                             /* if ($7 != 0)
++                              *   return $2;
++                              */
++                             "bne  $19,1f\n"
++                             "bne  $0,1f\n"
++
++                             /* In the child, now. Call "fn(arg)".
++                              */
++                            "ldl    $27,0($30)\n"
++                            "ldl    $16,8($30)\n"
++                            "addl  $sp,32,$sp\n"
++                            "call  $26, ($27)\n"
++                            "ldgp $29, 0($26) \n"
++
++                             /* Call _exit($2)
++                              */
++                            "move  $0,$16\n"
++                            "call $26,_exit\n"
++
++                           "1:\n"
++                             : "=&r" (__v0), "=r" (__r19)
++                             : "i"(-EINVAL), "i"(__NR_clone), "i"(__NR_exit),
++                               "r"(fn), "r"(__stack), "r"(__flags), "r"(arg),
++                               "r"(__ptid), "r"(__r19), "r"(__ctid)
++                             : "$1", "$2", "$3", "$4", "$5", "$6", "$7",
++                               "$22","$23","$24","$25", "memory");
++      }
++      LSS_RETURN(int, __v0, __r19);
++    }
++  //end sw_64
+   #elif defined(__aarch64__)
+     #undef LSS_REG
+     #define LSS_REG(r,a) register long __x##r __asm__("x"#r) = (long)a
+diff --git a/src/malloc_hook_mmap_linux.h b/src/malloc_hook_mmap_linux.h
+index cbf3782..50e19c8 100644
+--- a/src/malloc_hook_mmap_linux.h
++++ b/src/malloc_hook_mmap_linux.h
+@@ -56,7 +56,7 @@
+     || defined(__aarch64__) \
+     || (defined(_MIPS_SIM) && (_MIPS_SIM == _ABI64 || _MIPS_SIM == _ABIN32)) \
+     || defined(__s390__) || (defined(__riscv) && __riscv_xlen == 64) \
+-    || defined(__e2k__)
++    || defined(__e2k__) || defined(__sw_64__)
+ 
+ static inline void* do_mmap64(void *start, size_t length,
+                               int prot, int flags,
+diff --git a/src/stacktrace.cc b/src/stacktrace.cc
+index 2a2c648..e60fcf8 100644
+--- a/src/stacktrace.cc
++++ b/src/stacktrace.cc
+@@ -163,6 +163,15 @@ struct GetStackImplementation {
+ #define HAVE_GST_arm
+ #endif
+ 
++#if defined(__sw_64__)
++#define STACKTRACE_INL_HEADER "stacktrace_sw_64-inl.h"
++#define GST_SUFFIX sw_64
++#include "stacktrace_impl_setup-inl.h"
++#undef GST_SUFFIX
++#undef STACKTRACE_INL_HEADER
++#define HAVE_GST_sw_64
++#endif
++
+ #ifdef TCMALLOC_ENABLE_INSTRUMENT_STACKTRACE
+ #define STACKTRACE_INL_HEADER "stacktrace_instrument-inl.h"
+ #define GST_SUFFIX instrument
+diff --git a/src/stacktrace_sw_64-inl.h b/src/stacktrace_sw_64-inl.h
+new file mode 100644
+index 0000000..1fe6281
+--- /dev/null
++++ b/src/stacktrace_sw_64-inl.h
+@@ -0,0 +1,148 @@
++// -*- Mode: C++; c-basic-offset: 2; indent-tabs-mode: nil -*-
++// Copyright (c) 2011, Google Inc.
++// All rights reserved.
++//
++// Redistribution and use in source and binary forms, with or without
++// modification, are permitted provided that the following conditions are
++// met:
++//
++//     * Redistributions of source code must retain the above copyright
++// notice, this list of conditions and the following disclaimer.
++//     * Redistributions in binary form must reproduce the above
++// copyright notice, this list of conditions and the following disclaimer
++// in the documentation and/or other materials provided with the
++// distribution.
++//     * Neither the name of Google Inc. nor the names of its
++// contributors may be used to endorse or promote products derived from
++// this software without specific prior written permission.
++//
++// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
++// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
++// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
++// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
++// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
++// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
++// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++
++// ---
++// Author: Doug Kwan
++// This is inspired by Craig Silverstein's PowerPC stacktrace code.
++//
++
++#ifndef BASE_STACKTRACE_ARM_INL_H_
++#define BASE_STACKTRACE_ARM_INL_H_
++// Note: this file is included into stacktrace.cc more than once.
++// Anything that should only be defined once should be here:
++
++#include <stdint.h>   // for uintptr_t
++#include "base/basictypes.h"  // for NULL
++#include <gperftools/stacktrace.h>
++
++// WARNING:
++// This only works if all your code is in either ARM or THUMB mode.  With
++// interworking, the frame pointer of the caller can either be in r11 (ARM
++// mode) or r7 (THUMB mode).  A callee only saves the frame pointer of its
++// mode in a fixed location on its stack frame.  If the caller is a different
++// mode, there is no easy way to find the frame pointer.  It can either be
++// still in the designated register or saved on stack along with other callee
++// saved registers.
++
++// Given a pointer to a stack frame, locate and return the calling
++// stackframe, or return NULL if no stackframe can be found. Perform sanity
++// checks (the strictness of which is controlled by the boolean parameter
++// "STRICT_UNWINDING") to reduce the chance that a bad pointer is returned.
++template<bool STRICT_UNWINDING>
++static void **NextStackFrame(void **old_sp) {
++  void **new_sp = (void**) old_sp[-1];
++
++  // Check that the transition from frame pointer old_sp to frame
++  // pointer new_sp isn't clearly bogus
++  if (STRICT_UNWINDING) {
++    // With the stack growing downwards, older stack frame must be
++    // at a greater address that the current one.
++    if (new_sp >= old_sp) return NULL;
++    // Assume stack frames larger than 100,000 bytes are bogus.
++    if ((uintptr_t)old_sp - (uintptr_t)new_sp > 100000) return NULL;
++  } else {
++    // In the non-strict mode, allow discontiguous stack frames.
++    // (alternate-signal-stacks for example).
++    if (new_sp == old_sp) return NULL;
++    // And allow frames upto about 1MB.
++    if ((new_sp < old_sp)
++        && ((uintptr_t)old_sp - (uintptr_t)new_sp > 1000000)) return NULL;
++  }
++  if ((uintptr_t)new_sp & (sizeof(void *) - 1)) return NULL;
++  return new_sp;
++}
++
++// This ensures that GetStackTrace stes up the Link Register properly.
++#ifdef __GNUC__
++void StacktraceSw_64DummyFunction() __attribute__((noinline));
++void StacktraceSw_64DummyFunction() { __asm__ volatile(""); }
++#else
++# error StacktraceSw_64DummyFunction() needs to be ported to this platform.
++#endif
++#endif  // BASE_STACKTRACE_ARM_INL_H_
++
++// Note: this part of the file is included several times.
++// Do not put globals below.
++
++// The following 4 functions are generated from the code below:
++//   GetStack{Trace,Frames}()
++//   GetStack{Trace,Frames}WithContext()
++//
++// These functions take the following args:
++//   void** result: the stack-trace, as an array
++//   int* sizes: the size of each stack frame, as an array
++//               (GetStackFrames* only)
++//   int max_depth: the size of the result (and sizes) array(s)
++//   int skip_count: how many stack pointers to skip before storing in result
++//   void* ucp: a ucontext_t* (GetStack{Trace,Frames}WithContext only)
++static int GET_STACK_TRACE_OR_FRAMES {
++#ifdef __GNUC__
++  void **sp = reinterpret_cast<void**>(__builtin_frame_address(0));
++#else
++# error reading stack point not yet supported on this platform.
++#endif
++
++  // On ARM, the return address is stored in the link register (r14).
++  // This is not saved on the stack frame of a leaf function.  To
++  // simplify code that reads return addresses, we call a dummy
++  // function so that the return address of this function is also
++  // stored in the stack frame.  This works at least for gcc.
++  StacktraceSw_64DummyFunction();
++
++  skip_count++; // skip parent frame due to indirection in stacktrace.cc
++
++  int n = 0;
++  while (sp && n < max_depth) {
++    // The GetStackFrames routine is called when we are in some
++    // informational context (the failure signal handler for example).
++    // Use the non-strict unwinding rules to produce a stack trace
++    // that is as complete as possible (even if it contains a few bogus
++    // entries in some rare cases).
++    void **next_sp = NextStackFrame<IS_STACK_FRAMES == 0>(sp);
++
++    if (skip_count > 0) {
++      skip_count--;
++    } else {
++      result[n] = *sp;
++
++#if IS_STACK_FRAMES
++      if (next_sp < sp) {
++        sizes[n] = (uintptr_t)sp - (uintptr_t)next_sp;
++      } else {
++        // A frame-size of 0 is used to indicate unknown frame size.
++        sizes[n] = 0;
++      }
++#endif
++      n++;
++    }
++    sp = next_sp;
++  }
++  return n;
++}
