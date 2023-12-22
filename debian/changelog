@@ -1,14 +1,43 @@
-google-perftools (2.9.1.1-1+dde) UNRELEASED; urgency=medium
+google-perftools (2.13-1) unstable; urgency=medium
 
-  * update
+  * New upstream release.
+  * No more needed to link with atomic.
 
- -- Laszlo Boszormenyi (GCS) <gcs@debian.org>  Mon, 25 Jul 2022 17:28:13 +0800
+ -- Laszlo Boszormenyi (GCS) <gcs@debian.org>  Thu, 14 Sep 2023 13:32:35 +0000
 
-google-perftools (2.9.1.1-1+dde) unstable; urgency=medium
+google-perftools (2.12-2) unstable; urgency=medium
 
-  * Add sunway support.
+  * Link with atomic on armel and powerpc architectures.
 
- -- Miao Changwei <miaochangwei@uniontech.com>  Sat, 14 May 2022 20:15:41 +0800
+ -- Laszlo Boszormenyi (GCS) <gcs@debian.org>  Wed, 06 Sep 2023 06:21:39 +0000
+
+google-perftools (2.12-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Disable profiler_unittest for now due to i386 failures.
+
+ -- Laszlo Boszormenyi (GCS) <gcs@debian.org>  Tue, 05 Sep 2023 14:33:40 +0000
+
+google-perftools (2.11-1) unstable; urgency=medium
+
+  * New upstream release.
+  * Add HTML documentation (closes: #754380).
+  * Use no for Rules-Requires-Root.
+  * Update Standards-Version to 4.6.2 .
+
+  [ Debian Janitor <janitor@jelmer.uk> ]
+  * Set upstream metadata fields: Bug-Database, Bug-Submit, Repository-Browse.
+  * Remove field Section on binary packages libgoogle-perftools4,
+    libtcmalloc-minimal4 that duplicates source.
+  * Avoid explicitly specifying -Wl,--as-needed linker flag.
+
+ -- Laszlo Boszormenyi (GCS) <gcs@debian.org>  Tue, 15 Aug 2023 18:06:40 +0200
+
+google-perftools (2.10-1) unstable; urgency=medium
+
+  * New upstream release.
+
+ -- Laszlo Boszormenyi (GCS) <gcs@debian.org>  Wed, 01 Jun 2022 21:09:09 +0200
 
 google-perftools (2.9.1-1) unstable; urgency=medium
 

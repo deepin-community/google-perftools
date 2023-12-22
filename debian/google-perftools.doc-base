@@ -1,0 +1,9 @@
+Document: google-perftools
+Title: Gperftools CPU Profiler
+Author: Google Inc.
+Abstract: Manual for Gperftools
+Section: Programming/C++
+
+Format: HTML
+Index: /usr/share/doc/google-perftools/index.html
+Files: /usr/share/doc/google-perftools/*.css /usr/share/doc/google-perftools/*.gif /usr/share/doc/google-perftools/*.html /usr/share/doc/google-perftools/*.png

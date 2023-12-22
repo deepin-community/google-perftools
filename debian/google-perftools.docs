@@ -1,2 +1,5 @@
 usr/share/doc/gperftools/README
-
+usr/share/doc/gperftools/*.css
+usr/share/doc/gperftools/*.gif
+usr/share/doc/gperftools/*.html
+usr/share/doc/gperftools/*.png

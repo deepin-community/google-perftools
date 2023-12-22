@@ -1,0 +1,19 @@
+Description: do not run profiler_unittest
+ It causes FTBFS on i386 (only) and considered flaky.
+Author: Laszlo Boszormenyi (GCS) <gcs@debian.org>
+Forwarded: no
+Last-Update: 2023-09-05
+
+---
+
+--- google-perftools-2.12.orig/Makefile.am
++++ google-perftools-2.12/Makefile.am
+@@ -1277,7 +1277,7 @@ profile_handler_unittest_CXXFLAGS = $(PT
+ profile_handler_unittest_LDFLAGS = $(PTHREAD_CFLAGS) $(AM_LDFLAGS)
+ profile_handler_unittest_LDADD = libprofiler.la $(PTHREAD_LIBS)
+ 
+-TESTS += profiler_unittest.sh$(EXEEXT)
++#TESTS += profiler_unittest.sh$(EXEEXT)
+ profiler_unittest_sh_SOURCES = src/tests/profiler_unittest.sh
+ noinst_SCRIPTS += $(profiler_unittest_sh_SOURCES)
+ profiler_unittest.sh$(EXEEXT): $(top_srcdir)/$(profiler_unittest_sh_SOURCES) \
