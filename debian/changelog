@@ -1,3 +1,9 @@
+google-perftools (2.13-1deepin1) unstable; urgency=medium
+
+  * feat: add sw64 support.
+
+ -- hudeng <hudeng@deepin.org>  Thu, 29 May 2025 15:40:48 +0800
+
 google-perftools (2.13-1) unstable; urgency=medium
 
   * New upstream release.
